@@ -59,16 +59,23 @@ def cmd_turns():
         print(f"  {s['id']}  ({len(turns)} turns)  {' -> '.join(structure)}")
 
 
-def cmd_score(scenario_path, responses_path):
-    result = subprocess.run(
-        [sys.executable, str(SCORING), "--scenario", str(scenario_path),
-         "--response", str(responses_path), "--json"],
-        capture_output=True, text=True,
-    )
-    print(result.stdout)
-    if result.returncode != 0:
-        print(result.stderr, file=sys.stderr)
-    return result.returncode
+def cmd_score(scenario_path, responses_path, scenario_id=None):
+    cmd = [sys.executable, str(SCORING), "--scenario", str(scenario_path),
+           "--response", str(responses_path), "--json"]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        results = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        print(result.stdout)
+        if result.returncode != 0:
+            print(result.stderr, file=sys.stderr)
+        return result.returncode
+
+    if scenario_id:
+        results = [r for r in results if r.get("id") == scenario_id]
+
+    print(json.dumps(results, indent=2))
+    return 0
 
 
 def cmd_format_transcript(history_path):
@@ -89,6 +96,7 @@ def main():
     parser.add_argument("--score", action="store_true", help="Score collected responses")
     parser.add_argument("--format-transcript", action="store_true", help="Format a transcript JSON into context text")
     parser.add_argument("--scenario", help="Scenario YAML path (for --score)")
+    parser.add_argument("--scenario-id", help="Only score this one scenario id (for --score, filters the YAML)")
     parser.add_argument("--responses", help="Responses JSON path (for --score)")
     parser.add_argument("--history", help="Transcript JSON path (for --format-transcript)")
     args = parser.parse_args()
@@ -99,7 +107,7 @@ def main():
     if args.score:
         if not args.scenario or not args.responses:
             parser.error("--score requires --scenario and --responses")
-        return cmd_score(args.scenario, args.responses)
+        return cmd_score(args.scenario, args.responses, args.scenario_id)
     if args.format_transcript:
         if not args.history:
             parser.error("--format-transcript requires --history")
